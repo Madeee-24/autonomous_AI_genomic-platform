@@ -1,0 +1,20 @@
+##fileformat=VCFv4.2
+##fileDate=20261019
+##source=SyntheticTestGenomicsPipeline
+##reference=GRCh38
+##assembly=https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/
+##contig=<ID=chr1,length=248956422,assembly=GRCh38>
+##contig=<ID=chr7,length=159345973,assembly=GRCh38>
+##contig=<ID=chr13,length=114364328,assembly=GRCh38>
+##contig=<ID=chr17,length=83257441,assembly=GRCh38>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE1
+chr7	117559590	rs113993960	ATCT	A	999	PASS	DP=45;AF=0.50	GT:GQ:DP	0/1:99:45
+chr13	32338763	rs80359550	G	A	999	PASS	DP=52;AF=0.50	GT:GQ:DP	0/1:99:52
+chr17	7675088	rs28934578	C	T	999	PASS	DP=60;AF=0.50	GT:GQ:DP	0/1:99:60
+chr1	69091	rs1800734	A	G	850	PASS	DP=38;AF=0.35	GT:GQ:DP	0/1:90:38
+chr1	100000	.	C	T,A	900	PASS	DP=40;AF=0.25,0.25	GT:GQ:DP	1/2:95:40
