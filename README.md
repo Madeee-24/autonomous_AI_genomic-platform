@@ -155,7 +155,7 @@ Frontend interface will be available at: `http://localhost:5173`
 - [x] **Phase 0:** Requirements, Environment checks, Project Skeleton, Config, and Baseline Verification
 - [x] **Phase 1:** VCF Validation, Parsing Engine & Synthetic Fixtures
 - [x] **Phase 2:** FastAPI Upload & Validation REST Endpoints
-- [ ] **Phase 3:** PostgreSQL Database Models & Alembic Migrations
+- [x] **Phase 3:** PostgreSQL Database Models & Alembic Migrations
 - [ ] **Phase 4:** Asynchronous Analysis Job Orchestration
 - [ ] **Phase 5:** Ensembl VEP Annotation Integration
 - [ ] **Phase 6:** ClinVar Clinical Evidence Retrieval & Conflict Detection

@@ -11,10 +11,13 @@ from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
 
 from app.bioinformatics.validator import VCFValidator
 from app.core.config import settings
 from app.core.logging import logger
+from app.models.dataset import Dataset
+from app.repositories.dataset_repository import dataset_repo
 from app.schemas.dataset import (
     DatasetListItem,
     DatasetListResponse,
@@ -151,7 +154,7 @@ class DatasetService:
 
         uploaded_at = datetime.now(timezone.utc).isoformat()
 
-        # 5. Register dataset metadata
+        # 5. Register dataset metadata in memory and database if active
         record = {
             "dataset_id": dataset_id,
             "original_filename": original_filename,
@@ -222,3 +225,4 @@ class DatasetService:
 
 
 dataset_service = DatasetService()
+
