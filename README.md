@@ -153,8 +153,8 @@ Frontend interface will be available at: `http://localhost:5173`
 ## 6. Implementation Roadmap
 
 - [x] **Phase 0:** Requirements, Environment checks, Project Skeleton, Config, and Baseline Verification
-- [ ] **Phase 1:** VCF Validation, Parsing Engine & Synthetic Fixtures
-- [ ] **Phase 2:** FastAPI Upload & Validation REST Endpoints
+- [x] **Phase 1:** VCF Validation, Parsing Engine & Synthetic Fixtures
+- [x] **Phase 2:** FastAPI Upload & Validation REST Endpoints
 - [ ] **Phase 3:** PostgreSQL Database Models & Alembic Migrations
 - [ ] **Phase 4:** Asynchronous Analysis Job Orchestration
 - [ ] **Phase 5:** Ensembl VEP Annotation Integration
@@ -165,3 +165,4 @@ Frontend interface will be available at: `http://localhost:5173`
 - [ ] **Phase 10:** Multi-Stage Workflow Orchestration
 - [ ] **Phase 11:** Audit-Ready PDF Report Generation (ReportLab)
 - [ ] **Phase 12:** End-to-End Testing, Security Hardening & Documentation
+
