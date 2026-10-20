@@ -30,6 +30,10 @@ class AnalysisJob(Base):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    def __init__(self, **kwargs):
+        kwargs.setdefault("id", str(uuid.uuid4()))
+        super().__init__(**kwargs)
+
     # Relationships
     dataset = relationship("Dataset", back_populates="analyses")
     variants = relationship("Variant", back_populates="analysis", cascade="all, delete-orphan")
@@ -50,4 +54,9 @@ class WorkflowEvent(Base):
     details_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
+    def __init__(self, **kwargs):
+        kwargs.setdefault("id", str(uuid.uuid4()))
+        super().__init__(**kwargs)
+
     analysis = relationship("AnalysisJob", back_populates="events")
+

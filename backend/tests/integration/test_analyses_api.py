@@ -124,3 +124,58 @@ def test_cancel_analysis_endpoint(sample_vcf_path):
     assert repeat_cancel.status_code == 400
 
 
+def test_create_and_run_analysis_with_vep_annotations(sample_vcf_path):
+    from unittest.mock import patch
+    from tests.unit.test_vep_client import MOCK_VEP_RESPONSE
+    from app.db.session import get_db
+    from app.models.annotation import Annotation
+    from sqlalchemy import select
+
+    # 1. Upload dataset
+    with open(sample_vcf_path, "rb") as f:
+        upload_res = client.post(
+            "/api/v1/datasets/upload",
+            files={"file": ("sample_for_vep.vcf", f, "text/plain")},
+            data={"assembly": "GRCh38"}
+        )
+    dataset_id = upload_res.json()["dataset_id"]
+
+    # 2. Start analysis with annotate_with_vep=True, mocking VEP API response
+    with patch("app.bioinformatics.vep_client.EnsemblVEPClient.annotate_batch", return_value=(MOCK_VEP_RESPONSE, None)):
+        analysis_res = client.post(
+            "/api/v1/analyses",
+            json={
+                "dataset_id": dataset_id,
+                "genome_assembly": "GRCh38",
+                "options": {
+                    "annotate_with_vep": True,
+                    "retrieve_clinvar_evidence": False,
+                    "generate_ai_explanations": False
+                }
+            }
+        )
+
+    assert analysis_res.status_code == 202
+    analysis_id = analysis_res.json()["id"]
+
+    # 3. Check status
+    get_res = client.get(f"/api/v1/analyses/{analysis_id}")
+    assert get_res.status_code == 200
+    job_data = get_res.json()
+    assert job_data["status"] in ["COMPLETED", "COMPLETED_WITH_WARNINGS"]
+
+    # 4. Check events for ANNOTATING stage
+    events_res = client.get(f"/api/v1/analyses/{analysis_id}/events")
+    events = events_res.json()
+    stages = [e["stage"] for e in events]
+    assert "ANNOTATING" in stages
+
+    # 5. Check database for persisted annotations
+    db = next(app.dependency_overrides[get_db]())
+    annotations = list(db.scalars(select(Annotation)).all())
+    assert len(annotations) > 0
+    symbols = [a.gene_symbol for a in annotations if a.gene_symbol]
+    assert any(s in ["TP53", "CFTR"] for s in symbols)
+
+
+

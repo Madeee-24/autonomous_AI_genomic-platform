@@ -29,3 +29,4 @@ class EvidenceRecord(Base):
     raw_record_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     variant = relationship("Variant", back_populates="evidence_records")
+

@@ -25,3 +25,4 @@ class Report(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     analysis = relationship("AnalysisJob", back_populates="reports")
+

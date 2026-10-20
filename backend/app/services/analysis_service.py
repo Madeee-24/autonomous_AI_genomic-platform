@@ -8,6 +8,7 @@ from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.bioinformatics.vcf_parser import VCFParser
+from app.bioinformatics.vep_client import EnsemblVEPClient, vep_client
 from app.core.logging import logger
 from app.db.session import SessionLocal
 from app.models.analysis import AnalysisJob
@@ -29,9 +30,15 @@ class AnalysisService:
     Manages analysis jobs, workflow events, and asynchronous execution.
     """
 
-    def __init__(self, parser: Optional[VCFParser] = None, session_factory=None):
+    def __init__(
+        self,
+        parser: Optional[VCFParser] = None,
+        session_factory=None,
+        vep_client_instance: Optional[EnsemblVEPClient] = None
+    ):
         self.parser = parser or VCFParser()
         self.session_factory = session_factory or SessionLocal
+        self.vep_client = vep_client_instance or vep_client
 
     def create_analysis(
         self,
@@ -149,7 +156,33 @@ class AnalysisService:
                 details={"variants_count": inserted_count, "multiallelic_expanded": len(parsed_variants)}
             )
 
-            # 4. Mark COMPLETED (or COMPLETED_WITH_WARNINGS)
+            # 4. Optional VEP Annotation Stage
+            job = analysis_repo.get(db, job_id)
+            config = job.configuration_json or {}
+            options = config.get("options", {})
+            assembly = config.get("genome_assembly", "GRCh38")
+
+            if options.get("annotate_with_vep", False):
+                analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="ANNOTATING")
+                analysis_repo.add_event(
+                    db, job_id=job_id, stage="ANNOTATING", event_type="STAGE_STARTED",
+                    message="Starting variant consequence annotation via Ensembl VEP REST API."
+                )
+                annotations, vep_warnings = self.vep_client.annotate_variants(variant_models, assembly=assembly)
+                if annotations:
+                    db.add_all(annotations)
+                    db.commit()
+
+                for w in vep_warnings:
+                    summary.warnings.append(w)
+
+                analysis_repo.add_event(
+                    db, job_id=job_id, stage="ANNOTATING", event_type="STAGE_COMPLETED",
+                    message=f"Annotated {len(annotations)} consequences using Ensembl VEP.",
+                    details={"annotations_count": len(annotations), "warnings": vep_warnings}
+                )
+
+            # 5. Mark COMPLETED (or COMPLETED_WITH_WARNINGS)
             final_status = "COMPLETED_WITH_WARNINGS" if summary.warnings else "COMPLETED"
             analysis_repo.update_status(db, job_id=job_id, status=final_status, current_stage="FINISHED")
             analysis_repo.add_event(

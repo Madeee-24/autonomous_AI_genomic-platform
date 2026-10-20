@@ -31,9 +31,14 @@ class Variant(Base):
     is_multiallelic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
+    def __init__(self, **kwargs):
+        kwargs.setdefault("id", str(uuid.uuid4()))
+        super().__init__(**kwargs)
+
     # Relationships
     analysis = relationship("AnalysisJob", back_populates="variants")
     annotations = relationship("Annotation", back_populates="variant", cascade="all, delete-orphan")
     evidence_records = relationship("EvidenceRecord", back_populates="variant", cascade="all, delete-orphan")
     prioritization = relationship("PrioritizationResult", back_populates="variant", uselist=False, cascade="all, delete-orphan")
     ai_explanation = relationship("AIExplanation", back_populates="variant", uselist=False, cascade="all, delete-orphan")
+
