@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.analyses import router as analyses_router
 from app.api.datasets import router as datasets_router
 from app.core.config import settings
 from app.core.logging import logger
@@ -66,6 +67,11 @@ app.include_router(
     datasets_router,
     prefix=f"{settings.API_V1_STR}/datasets",
     tags=["Datasets"]
+)
+app.include_router(
+    analyses_router,
+    prefix=f"{settings.API_V1_STR}/analyses",
+    tags=["Analyses"]
 )
 
 

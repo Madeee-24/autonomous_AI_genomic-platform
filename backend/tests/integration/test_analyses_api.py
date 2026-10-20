@@ -1,0 +1,126 @@
+"""
+Integration tests for Analysis Job Management, Background Processing, and Event Auditing.
+"""
+from pathlib import Path
+import pytest
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+client = TestClient(app)
+
+
+@pytest.fixture
+def sample_vcf_path():
+    path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "test_fixtures" / "sample.vcf"
+    assert path.exists(), f"Sample VCF fixture not found at {path}"
+    return path
+
+
+def test_create_and_run_analysis_pipeline(sample_vcf_path):
+    # 1. Upload dataset first
+    with open(sample_vcf_path, "rb") as f:
+        upload_res = client.post(
+            "/api/v1/datasets/upload",
+            files={"file": ("sample.vcf", f, "text/plain")},
+            data={"assembly": "GRCh38"}
+        )
+    assert upload_res.status_code == 201
+    dataset_id = upload_res.json()["dataset_id"]
+
+    # 2. Start Analysis Job
+    analysis_res = client.post(
+        "/api/v1/analyses",
+        json={
+            "dataset_id": dataset_id,
+            "genome_assembly": "GRCh38",
+            "options": {
+                "annotate_with_vep": False,
+                "retrieve_clinvar_evidence": False,
+                "generate_ai_explanations": False
+            }
+        }
+    )
+    assert analysis_res.status_code == 202
+    data = analysis_res.json()
+    assert "id" in data
+    assert data["dataset_id"] == dataset_id
+    analysis_id = data["id"]
+
+    # 3. Poll analysis details
+    get_res = client.get(f"/api/v1/analyses/{analysis_id}")
+    assert get_res.status_code == 200
+    job_data = get_res.json()
+    # TestClient synchronously executes BackgroundTasks, so the pipeline finishes
+    assert job_data["status"] in ["COMPLETED", "COMPLETED_WITH_WARNINGS"]
+    assert job_data["variants_count"] == 6
+
+    # 4. Check audit events
+    events_res = client.get(f"/api/v1/analyses/{analysis_id}/events")
+    assert events_res.status_code == 200
+    events = events_res.json()
+    assert len(events) >= 4
+    stages = [e["stage"] for e in events]
+    assert "QUEUED" in stages
+    assert "PARSING" in stages
+    assert "FINISHED" in stages
+
+
+def test_create_analysis_nonexistent_dataset():
+    response = client.post(
+        "/api/v1/analyses",
+        json={
+            "dataset_id": "nonexistent-0000-0000-0000-000000000000",
+            "genome_assembly": "GRCh38"
+        }
+    )
+    assert response.status_code == 404
+    data = response.json()
+    assert "not found" in data["detail"].lower()
+
+
+def test_list_analyses_endpoint():
+    res = client.get("/api/v1/analyses")
+    assert res.status_code == 200
+    data = res.json()
+    assert "total" in data
+    assert isinstance(data["items"], list)
+
+
+def test_cancel_analysis_endpoint(sample_vcf_path):
+    # 1. Upload dataset
+    with open(sample_vcf_path, "rb") as f:
+        upload_res = client.post(
+            "/api/v1/datasets/upload",
+            files={"file": ("sample_for_cancel.vcf", f, "text/plain")},
+            data={"assembly": "GRCh38"}
+        )
+    dataset_id = upload_res.json()["dataset_id"]
+
+    # 2. Inject a job in QUEUED status directly into the test database
+    from app.db.session import get_db
+    from app.models.analysis import AnalysisJob
+    from app.repositories.analysis_repository import analysis_repo
+
+    # Use the overridden test database session
+    db = next(app.dependency_overrides[get_db]())
+    queued_job = AnalysisJob(
+        dataset_id=dataset_id,
+        status="QUEUED",
+        current_stage="QUEUED"
+    )
+    analysis_repo.create(db, queued_job)
+    job_id = queued_job.id
+
+    # 3. Call cancel endpoint
+    cancel_res = client.post(f"/api/v1/analyses/{job_id}/cancel")
+    assert cancel_res.status_code == 200
+    cancel_data = cancel_res.json()
+    assert cancel_data["status"] == "CANCELLED"
+    assert cancel_data["current_stage"] == "CANCELLED"
+
+    # 4. Attempting to cancel again should fail with 400
+    repeat_cancel = client.post(f"/api/v1/analyses/{job_id}/cancel")
+    assert repeat_cancel.status_code == 400
+
+
