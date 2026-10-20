@@ -1,8 +1,12 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 import os
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.datasets import router as datasets_router
 from app.core.config import settings
 from app.core.logging import logger
 
@@ -16,9 +20,11 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing Autonomous AI Genomic Analysis Platform...")
     
     # Ensure local storage directories exist safely
-    os.makedirs(settings.UPLOAD_DIRECTORY, exist_ok=True)
-    os.makedirs(settings.REPORT_DIRECTORY, exist_ok=True)
-    logger.info(f"Storage directories initialized: {settings.UPLOAD_DIRECTORY}, {settings.REPORT_DIRECTORY}")
+    upload_path = Path(settings.UPLOAD_DIRECTORY).resolve()
+    report_path = Path(settings.REPORT_DIRECTORY).resolve()
+    os.makedirs(upload_path, exist_ok=True)
+    os.makedirs(report_path, exist_ok=True)
+    logger.info(f"Storage directories initialized: {upload_path}, {report_path}")
     
     yield
     
@@ -34,6 +40,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Standardized Exception Handler
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "error_code": f"HTTP_{exc.status_code}",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    )
+
 # CORS middleware for frontend communication
 app.add_middleware(
     CORSMiddleware,
@@ -41,6 +59,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Include API Routers
+app.include_router(
+    datasets_router,
+    prefix=f"{settings.API_V1_STR}/datasets",
+    tags=["Datasets"]
 )
 
 
