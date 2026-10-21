@@ -17,6 +17,9 @@ from app.models.ai import AIExplanation
 from app.models.analysis import AnalysisJob
 from app.models.prioritization import PrioritizationResult
 from app.models.variant import Variant
+from app.orchestration.stages import StageContext
+from app.orchestration.state import WorkflowState
+from app.orchestration.workflow import WorkflowOrchestrator, orchestrator
 from app.prioritization.prioritizer import VariantPrioritizer, prioritizer
 from app.repositories.analysis_repository import analysis_repo
 from app.repositories.dataset_repository import dataset_repo
@@ -53,7 +56,8 @@ class AnalysisService:
         vep_client_instance: Optional[EnsemblVEPClient] = None,
         clinvar_client_instance: Optional[ClinVarClient] = None,
         prioritizer_instance: Optional[VariantPrioritizer] = None,
-        explanation_service_instance: Optional[ExplanationService] = None
+        explanation_service_instance: Optional[ExplanationService] = None,
+        orchestrator_instance: Optional[WorkflowOrchestrator] = None,
     ):
         self.parser = parser or VCFParser()
         self.session_factory = session_factory or SessionLocal
@@ -61,6 +65,15 @@ class AnalysisService:
         self.clinvar_client = clinvar_client_instance or clinvar_client
         self.prioritizer = prioritizer_instance or prioritizer
         self.explanation_service = explanation_service_instance or explanation_service
+        self.orchestrator = orchestrator_instance or WorkflowOrchestrator(
+            context=StageContext(
+                parser=self.parser,
+                vep=self.vep_client,
+                clinvar=self.clinvar_client,
+                prioritizer_inst=self.prioritizer,
+                explainer=self.explanation_service,
+            )
+        )
 
     def create_analysis(
         self,
@@ -122,186 +135,29 @@ class AnalysisService:
 
     def run_pipeline_background(self, job_id: str, file_path: str) -> None:
         """
-        Background worker executing the genomic pipeline stages:
-        QUEUED -> VALIDATING -> PARSING -> PERSISTING -> COMPLETED
+        Background worker executing the autonomous genomic pipeline via WorkflowOrchestrator.
+        Handles stage graph progression, checkpoint recovery, bounded retries, and events.
         """
         factory = self.session_factory or SessionLocal
         db = factory()
         try:
             logger.info(f"Starting background pipeline execution for job: {job_id}")
-
-            # 1. Transition to VALIDATING / RUNNING
-            analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="VALIDATING")
-            analysis_repo.add_event(
-                db, job_id=job_id, stage="VALIDATING", event_type="STAGE_STARTED",
-                message="Starting VCF validation and coordinate inspection."
-            )
-
-            # 2. Transition to PARSING
-            analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="PARSING")
-            analysis_repo.add_event(
-                db, job_id=job_id, stage="PARSING", event_type="STAGE_STARTED",
-                message="Parsing variant records and multiallelic sites."
-            )
-
-            parsed_variants, summary = self.parser.parse(file_path, filename=Path(file_path).name)
-
-            if not summary.is_valid and summary.accepted_variants_count == 0:
-                raise ValueError("VCF file failed validation during pipeline processing.")
-
-            # 3. Bulk insert parsed variants
-            variant_models: List[Variant] = []
-            for pv in parsed_variants:
-                v = Variant(
-                    analysis_id=job_id,
-                    chromosome=pv.chromosome,
-                    position=pv.position,
-                    reference_allele=pv.reference_allele,
-                    alternate_allele=pv.alternate_allele,
-                    variant_identifier=pv.variant_id,
-                    variant_type=pv.variant_type.value,
-                    quality=pv.quality,
-                    filter_status=pv.filter_status,
-                    genotype_json={"gt": pv.genotype} if pv.genotype else None,
-                    info_json=pv.info_fields,
-                    allele_index=pv.allele_index,
-                    is_multiallelic=pv.is_multiallelic
-                )
-                variant_models.append(v)
-
-            inserted_count = variant_repo.bulk_create(db, variant_models)
-            logger.info(f"Persisted {inserted_count} variants for job {job_id}")
-
-            analysis_repo.add_event(
-                db, job_id=job_id, stage="PARSING", event_type="STAGE_COMPLETED",
-                message=f"Successfully extracted and stored {inserted_count} variant coordinates.",
-                details={"variants_count": inserted_count, "multiallelic_expanded": len(parsed_variants)}
-            )
-
-            # 4. Optional VEP Annotation Stage
-            job = analysis_repo.get(db, job_id)
-            config = job.configuration_json or {}
-            options = config.get("options", {})
-            assembly = config.get("genome_assembly", "GRCh38")
-
-            if options.get("annotate_with_vep", False):
-                analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="ANNOTATING")
-                analysis_repo.add_event(
-                    db, job_id=job_id, stage="ANNOTATING", event_type="STAGE_STARTED",
-                    message="Starting variant consequence annotation via Ensembl VEP REST API."
-                )
-                annotations, vep_warnings = self.vep_client.annotate_variants(variant_models, assembly=assembly)
-                if annotations:
-                    db.add_all(annotations)
-                    db.commit()
-
-                for w in vep_warnings:
-                    summary.warnings.append(w)
-
-                analysis_repo.add_event(
-                    db, job_id=job_id, stage="ANNOTATING", event_type="STAGE_COMPLETED",
-                    message=f"Annotated {len(annotations)} consequences using Ensembl VEP.",
-                    details={"annotations_count": len(annotations), "warnings": vep_warnings}
+            state = self.orchestrator.load_state_from_job(db, job_id, file_path)
+            if not state:
+                job = analysis_repo.get(db, job_id)
+                if not job:
+                    logger.error(f"Analysis job {job_id} not found in database.")
+                    return
+                cfg = job.configuration_json or {}
+                state = self.orchestrator.create_initial_state(
+                    analysis_id=job.id,
+                    dataset_id=job.dataset_id,
+                    file_path=file_path,
+                    genome_assembly=cfg.get("genome_assembly", "GRCh38"),
+                    options=cfg.get("options", {}),
                 )
 
-            # 5. Optional ClinVar Evidence Retrieval Stage
-            if options.get("retrieve_clinvar_evidence", False):
-                analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="RETRIEVING_EVIDENCE")
-                analysis_repo.add_event(
-                    db, job_id=job_id, stage="RETRIEVING_EVIDENCE", event_type="STAGE_STARTED",
-                    message="Querying NCBI ClinVar for clinical assertions and conflict detection."
-                )
-                evidence_records, cv_warnings = self.clinvar_client.retrieve_evidence_for_variants(variant_models, assembly=assembly)
-                if evidence_records:
-                    db.add_all(evidence_records)
-                    db.commit()
-
-                for w in cv_warnings:
-                    summary.warnings.append(w)
-
-                analysis_repo.add_event(
-                    db, job_id=job_id, stage="RETRIEVING_EVIDENCE", event_type="STAGE_COMPLETED",
-                    message=f"Retrieved {len(evidence_records)} clinical evidence records from ClinVar.",
-                    details={"evidence_count": len(evidence_records), "warnings": cv_warnings}
-                )
-
-            # 6. Prioritization Stage (Rule-based candidate ranking)
-            analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="PRIORITIZING")
-            analysis_repo.add_event(
-                db, job_id=job_id, stage="PRIORITIZING", event_type="STAGE_STARTED",
-                message="Evaluating variants using transparent heuristic prioritization matrix."
-            )
-            db_variants, _ = variant_repo.get_by_analysis(db, analysis_id=job_id, limit=10000)
-            prioritization_results = self.prioritizer.prioritize_batch(db_variants)
-            if prioritization_results:
-                db.add_all(prioritization_results)
-                db.commit()
-
-            tier_counts: dict = {}
-            for pr in prioritization_results:
-                tier_counts[pr.priority_category] = tier_counts.get(pr.priority_category, 0) + 1
-
-            analysis_repo.add_event(
-                db, job_id=job_id, stage="PRIORITIZING", event_type="STAGE_COMPLETED",
-                message=f"Prioritized {len(prioritization_results)} candidate variants.",
-                details={"tier_distribution": tier_counts}
-            )
-
-            # 7. (Optional) Evidence-Grounded AI Explanations
-            if options.get("generate_ai_explanations", False):
-                analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="GENERATING_EXPLANATIONS")
-                analysis_repo.add_event(
-                    db, job_id=job_id, stage="GENERATING_EXPLANATIONS", event_type="STAGE_STARTED",
-                    message="Synthesizing grounded AI explanations for candidate variants."
-                )
-                try:
-                    import asyncio
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            # Running inside existing event loop (e.g. test runner)
-                            import concurrent.futures
-                            with concurrent.futures.ThreadPoolExecutor() as executor:
-                                future = executor.submit(
-                                    asyncio.run,
-                                    self.explanation_service.explain_analysis_candidates(
-                                        db=db, analysis_id=job_id, limit=10, genome_assembly=assembly
-                                    )
-                                )
-                                exps = future.result()
-                        else:
-                            exps = loop.run_until_complete(
-                                self.explanation_service.explain_analysis_candidates(
-                                    db=db, analysis_id=job_id, limit=10, genome_assembly=assembly
-                                )
-                            )
-                    except RuntimeError:
-                        exps = asyncio.run(
-                            self.explanation_service.explain_analysis_candidates(
-                                db=db, analysis_id=job_id, limit=10, genome_assembly=assembly
-                            )
-                        )
-
-                    analysis_repo.add_event(
-                        db, job_id=job_id, stage="GENERATING_EXPLANATIONS", event_type="STAGE_COMPLETED",
-                        message=f"Synthesized {len(exps)} evidence-grounded AI explanations.",
-                        details={"explanations_count": len(exps)}
-                    )
-                except Exception as ai_err:
-                    logger.warning(f"AI explanation generation encountered error: {ai_err}")
-                    analysis_repo.add_event(
-                        db, job_id=job_id, stage="GENERATING_EXPLANATIONS", event_type="STAGE_WARNING",
-                        message=f"AI explanation skipped or partially completed: {str(ai_err)}"
-                    )
-
-            # 8. Mark COMPLETED (or COMPLETED_WITH_WARNINGS)
-            final_status = "COMPLETED_WITH_WARNINGS" if summary.warnings else "COMPLETED"
-            analysis_repo.update_status(db, job_id=job_id, status=final_status, current_stage="FINISHED")
-            analysis_repo.add_event(
-                db, job_id=job_id, stage="FINISHED", event_type="JOB_COMPLETED",
-                message=f"Analysis pipeline finished with status: {final_status}."
-            )
-
+            self.orchestrator.execute_workflow(db, state)
         except Exception as e:
             logger.error(f"Pipeline execution failed for job {job_id}: {str(e)}", exc_info=True)
             analysis_repo.update_status(
@@ -366,6 +222,75 @@ class AnalysisService:
         )
         _, count = variant_repo.get_by_analysis(db, job_id, limit=1)
         return self._format_response(updated, variants_count=count)
+
+    def resume_analysis(
+        self,
+        db: Session,
+        job_id: str,
+        background_tasks: BackgroundTasks,
+    ) -> AnalysisResponse:
+        """
+        Resumes an interrupted or failed analysis from its last recorded stage checkpoint.
+        """
+        job = analysis_repo.get(db, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Analysis job '{job_id}' not found."
+            )
+
+        if job.status not in ["FAILED", "CANCELLED"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot resume analysis in '{job.status}' state. Only FAILED or CANCELLED jobs can be resumed."
+            )
+
+        stored_file_path: Optional[str] = None
+        db_dataset = dataset_repo.get(db, job.dataset_id)
+        if db_dataset:
+            stored_file_path = db_dataset.stored_file_path
+        elif job.dataset_id in dataset_service._registry:
+            stored_file_path = dataset_service._registry[job.dataset_id]["stored_path"]
+
+        if not stored_file_path or not Path(stored_file_path).exists():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Dataset file is missing from storage: {stored_file_path}"
+            )
+
+        # Update status to QUEUED / RESUMING
+        updated_job = analysis_repo.update_status(
+            db, job_id=job_id, status="QUEUED", current_stage="RESUMING",
+            error_code=None, error_summary=None
+        )
+        analysis_repo.add_event(
+            db, job_id=job_id, stage="RESUMING", event_type="JOB_RESUMED",
+            message="Analysis resumed from last recorded checkpoint."
+        )
+
+        background_tasks.add_task(self.run_pipeline_background, job.id, stored_file_path)
+
+        _, count = variant_repo.get_by_analysis(db, job_id, limit=1)
+        return self._format_response(updated_job, variants_count=count)
+
+    def get_checkpoints(self, db: Session, job_id: str) -> dict:
+        """
+        Retrieves stage checkpoints and retry metadata for an analysis job.
+        """
+        job = analysis_repo.get(db, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Analysis job '{job_id}' not found."
+            )
+        cfg = job.configuration_json or {}
+        checkpoints = cfg.get("checkpoints", {})
+        return {
+            "analysis_id": job.id,
+            "status": job.status,
+            "current_stage": job.current_stage,
+            "checkpoints": checkpoints,
+        }
 
     def get_events(self, db: Session, job_id: str) -> List[WorkflowEventResponse]:
         """

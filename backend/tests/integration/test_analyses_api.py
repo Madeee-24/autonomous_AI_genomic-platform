@@ -397,6 +397,97 @@ def test_create_and_run_analysis_with_ai_explanations(sample_vcf_path):
     assert any(exp.validation_status == "VALID" for exp in ai_explanations)
 
 
+def test_get_checkpoints_endpoint(sample_vcf_path):
+    # 1. Upload dataset
+    with open(sample_vcf_path, "rb") as f:
+        upload_res = client.post(
+            "/api/v1/datasets/upload",
+            files={"file": ("sample_for_cp.vcf", f, "text/plain")},
+            data={"assembly": "GRCh38"}
+        )
+    dataset_id = upload_res.json()["dataset_id"]
+
+    # 2. Run analysis
+    analysis_res = client.post(
+        "/api/v1/analyses",
+        json={
+            "dataset_id": dataset_id,
+            "genome_assembly": "GRCh38",
+            "options": {
+                "annotate_with_vep": False,
+                "retrieve_clinvar_evidence": False,
+                "generate_ai_explanations": False,
+            }
+        }
+    )
+    analysis_id = analysis_res.json()["id"]
+
+    # 3. Query checkpoints
+    cp_res = client.get(f"/api/v1/analyses/{analysis_id}/checkpoints")
+    assert cp_res.status_code == 200
+    data = cp_res.json()
+    assert data["analysis_id"] == analysis_id
+    assert "checkpoints" in data
+    checkpoints = data["checkpoints"]
+    assert "VALIDATING" in checkpoints
+    assert checkpoints["VALIDATING"]["status"] == "COMPLETED"
+    assert "PARSING" in checkpoints
+    assert checkpoints["PARSING"]["status"] == "COMPLETED"
+
+
+def test_resume_cancelled_analysis_endpoint(sample_vcf_path):
+    from app.db.session import get_db
+    from app.models.analysis import AnalysisJob
+    from app.repositories.analysis_repository import analysis_repo
+
+    # 1. Upload dataset
+    with open(sample_vcf_path, "rb") as f:
+        upload_res = client.post(
+            "/api/v1/datasets/upload",
+            files={"file": ("sample_for_resume.vcf", f, "text/plain")},
+            data={"assembly": "GRCh38"}
+        )
+    dataset_id = upload_res.json()["dataset_id"]
+
+    # 2. Create job in CANCELLED status with prior checkpoints
+    db = next(app.dependency_overrides[get_db]())
+    job = AnalysisJob(
+        dataset_id=dataset_id,
+        status="CANCELLED",
+        current_stage="CANCELLED",
+        configuration_json={
+            "genome_assembly": "GRCh38",
+            "options": {
+                "annotate_with_vep": False,
+                "retrieve_clinvar_evidence": False,
+                "generate_ai_explanations": False,
+            },
+            "checkpoints": {
+                "VALIDATING": {"stage_name": "VALIDATING", "status": "COMPLETED"},
+            }
+        }
+    )
+    analysis_repo.create(db, job)
+    job_id = job.id
+
+    # 3. Resume job
+    resume_res = client.post(f"/api/v1/analyses/{job_id}/resume")
+    assert resume_res.status_code == 200
+    res_data = resume_res.json()
+    assert res_data["status"] == "QUEUED"
+
+    # 4. Check completed status after background execution
+    get_res = client.get(f"/api/v1/analyses/{job_id}")
+    assert get_res.status_code == 200
+    assert get_res.json()["status"] in ["COMPLETED", "COMPLETED_WITH_WARNINGS"]
+
+    # 5. Attempting to resume an already completed job should fail with 400
+    repeat_res = client.post(f"/api/v1/analyses/{job_id}/resume")
+    assert repeat_res.status_code == 400
+    assert "cannot resume" in repeat_res.json()["detail"].lower()
+
+
+
 
 
 

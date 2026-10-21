@@ -56,3 +56,4 @@ def test_build_variant_explanation_prompt():
     assert "ATCT>A" in prompt
     assert "GRCh38" in prompt
     assert PROMPT_VERSION == "v1.0"
+

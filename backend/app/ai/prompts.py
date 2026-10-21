@@ -142,3 +142,4 @@ INSTRUCTIONS:
 3. If no ClinVar records or annotations exist, explicitly declare that evidence is missing.
 4. Output strictly valid JSON.
 """
+

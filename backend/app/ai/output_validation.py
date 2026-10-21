@@ -95,3 +95,4 @@ class ExplanationGenerationResult(BaseModel):
     raw_response: Optional[str] = None
     validation_errors: Optional[List[str]] = None
     input_evidence_ids: Dict[str, Any] = Field(default_factory=dict)
+

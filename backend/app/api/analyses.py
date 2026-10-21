@@ -220,3 +220,36 @@ async def cancel_analysis(
     db: Session = Depends(get_db)
 ):
     return analysis_service.cancel_analysis(db, analysis_id)
+
+
+@router.post(
+    "/{analysis_id}/resume",
+    response_model=AnalysisResponse,
+    summary="Resume interrupted or failed analysis",
+    description="Resumes an interrupted or failed analysis job from its last recorded stage checkpoint.",
+    responses={
+        400: {"model": ErrorResponse, "description": "Job cannot be resumed"},
+        404: {"model": ErrorResponse, "description": "Analysis job not found"}
+    }
+)
+async def resume_analysis(
+    analysis_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    return analysis_service.resume_analysis(db, analysis_id, background_tasks)
+
+
+@router.get(
+    "/{analysis_id}/checkpoints",
+    summary="Get analysis stage checkpoints",
+    description="Returns stage checkpoint status, execution metrics, warnings, and retry attempts.",
+    responses={
+        404: {"model": ErrorResponse, "description": "Analysis job not found"}
+    }
+)
+async def get_analysis_checkpoints(
+    analysis_id: str,
+    db: Session = Depends(get_db)
+):
+    return analysis_service.get_checkpoints(db, analysis_id)

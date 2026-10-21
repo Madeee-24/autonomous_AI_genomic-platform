@@ -58,3 +58,4 @@ def test_diagnostic_claim_rejected_by_guardrails():
     with pytest.raises(ValidationError) as exc:
         VariantExplanationOutput(**data)
     assert "prohibited clinical diagnostic phrasing detected" in str(exc.value)
+

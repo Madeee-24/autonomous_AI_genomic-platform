@@ -130,3 +130,4 @@ async def test_explanation_service_missing_evidence_neutrality(in_memory_db):
     assert result.is_valid is True
     assert "no matching assertions are recorded in NCBI ClinVar" in result.parsed_output.summary.lower() or "currently" in result.parsed_output.summary.lower()
     assert len(result.parsed_output.uncertainties) > 0
+

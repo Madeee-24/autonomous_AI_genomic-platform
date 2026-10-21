@@ -38,6 +38,12 @@ data/uploads/*
 !data/uploads/.gitkeep
 data/generated_reports/*
 !data/generated_reports/.gitkeep
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+backend/data/generated_reports/*
+!backend/data/generated_reports/.gitkeep
+**/data/uploads/*
+**/data/generated_reports/*
 private_uploads/
 private_reports/
 *.vcf.gz.tbi
