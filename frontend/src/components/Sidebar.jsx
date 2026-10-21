@@ -75,10 +75,10 @@ export default function Sidebar() {
           </a>
         </div>
 
-        {/* Academic Project Badge */}
+        {/* Research Badge */}
         <div className="pt-2 border-t border-slate-800/80">
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            Final-Year CSE Major Engineering Project • Designed for reproducible genomic research.
+            Designed for reproducible genomic research.
           </p>
         </div>
       </div>
