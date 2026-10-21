@@ -148,6 +148,17 @@ npm run dev
 ```
 Frontend interface will be available at: `http://localhost:5173`
 
+### Production Docker Compose Deployment
+```bash
+# Build and run complete multi-container stack in one command
+docker compose up --build -d
+```
+Access at:
+- **Frontend Dashboard:** `http://localhost` (or `http://localhost:5173`)
+- **Backend Swagger UI:** `http://localhost:8000/docs`
+
+For detailed production instructions, cloud setups, and security hardening, see [Production Deployment Guide](docs/deployment-guide.md).
+
 ---
 
 ## 6. Implementation Roadmap

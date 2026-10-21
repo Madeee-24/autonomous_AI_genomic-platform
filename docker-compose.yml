@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: postgres_secure_password
       POSTGRES_DB: genomics_db
     ports:
       - "5432:5432"
@@ -16,7 +16,56 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - genomics_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: genomics_backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DEBUG: "False"
+      DATABASE_URL: postgresql+psycopg://postgres:postgres_secure_password@postgres:5432/genomics_db
+      UPLOAD_DIRECTORY: /app/data/uploads
+      REPORT_DIRECTORY: /app/data/generated_reports
+      DEFAULT_GENOME_ASSEMBLY: GRCh38
+      VEP_BASE_URL: https://rest.ensembl.org
+      CLINVAR_BASE_URL: https://eutils.ncbi.nlm.nih.gov/entrez/eutils
+      LLM_PROVIDER: mock
+      LLM_MODEL: mock-synthesizer
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads_data:/app/data/uploads
+      - reports_data:/app/data/generated_reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - genomics_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: genomics_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - genomics_net
 
 volumes:
   postgres_data:
+  uploads_data:
+  reports_data:
 
+networks:
+  genomics_net:
+    driver: bridge
