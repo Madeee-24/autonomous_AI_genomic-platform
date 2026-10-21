@@ -46,9 +46,12 @@ class Settings(BaseSettings):
     CLINVAR_BASE_URL: str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 
     # AI Configuration (Optional, non-blocking)
-    LLM_PROVIDER: str = "none"  # e.g., "gemini", "openai", "none"
+    LLM_PROVIDER: str = "mock"  # e.g., "mock", "gemini", "openai", "ollama", "none"
     LLM_API_KEY: str = ""
     LLM_MODEL: str = "gemini-1.5-flash"
+    LLM_BASE_URL: str = ""
+    LLM_TEMPERATURE: float = 0.0
+    LLM_MAX_TOKENS: int = 1500
 
 
 settings = Settings()

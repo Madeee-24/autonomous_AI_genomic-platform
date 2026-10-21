@@ -14,6 +14,7 @@ from app.schemas.analysis import (
 )
 from app.schemas.dataset import ErrorResponse
 from app.schemas.variant import (
+    AIExplanationSummary,
     AnalysisStatisticsResponse,
     DashboardSummaryResponse,
     VariantDetailResponse,
@@ -167,6 +168,41 @@ async def get_variant_detail(
     db: Session = Depends(get_db)
 ):
     return analysis_service.get_variant_detail(db, job_id=analysis_id, variant_id=variant_id)
+
+
+@router.post(
+    "/{analysis_id}/variants/{variant_id}/explain",
+    response_model=AIExplanationSummary,
+    summary="Generate on-demand evidence-grounded AI explanation for a variant",
+    description="Invokes the configured LLM client to synthesize stored annotations and ClinVar records into a structured scientific explanation.",
+    responses={
+        404: {"model": ErrorResponse, "description": "Variant or analysis not found"},
+        500: {"model": ErrorResponse, "description": "AI explanation generation or validation failed"}
+    }
+)
+async def explain_variant(
+    analysis_id: str,
+    variant_id: str,
+    db: Session = Depends(get_db)
+):
+    return await analysis_service.explain_variant(db, job_id=analysis_id, variant_id=variant_id)
+
+
+@router.get(
+    "/{analysis_id}/variants/{variant_id}/explanation",
+    response_model=AIExplanationSummary,
+    summary="Get stored AI explanation for a variant",
+    description="Retrieves the structured evidence-grounded AI explanation and provenance for a variant.",
+    responses={
+        404: {"model": ErrorResponse, "description": "Explanation, variant, or analysis not found"}
+    }
+)
+async def get_variant_explanation(
+    analysis_id: str,
+    variant_id: str,
+    db: Session = Depends(get_db)
+):
+    return analysis_service.get_variant_explanation(db, job_id=analysis_id, variant_id=variant_id)
 
 
 @router.post(

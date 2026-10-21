@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Dna,
@@ -8,17 +8,39 @@ import {
   Activity,
   Layers,
   Info,
+  Sparkles,
+  HelpCircle,
 } from 'lucide-react';
 import TierBadge from './TierBadge';
 import ImpactBadge from './ImpactBadge';
 import ClinVarBadge from './ClinVarBadge';
+import { analysesApi } from '../services/api';
 
 export default function VariantDetailsModal({ variant, onClose }) {
+  const [aiExplanation, setAiExplanation] = useState(variant?.ai_explanation || null);
+  const [explaining, setExplaining] = useState(false);
+  const [explainError, setExplainError] = useState(null);
+
   if (!variant) return null;
 
   const prio = variant.prioritization;
   const reasons = prio?.reasons || {};
   const limitations = prio?.limitations || {};
+
+  const handleGenerateExplanation = async () => {
+    setExplaining(true);
+    setExplainError(null);
+    try {
+      const res = await analysesApi.explainVariant(variant.analysis_id, variant.id);
+      setAiExplanation(res);
+    } catch (err) {
+      setExplainError(err.message || 'Failed to synthesize AI explanation.');
+    } finally {
+      setExplaining(false);
+    }
+  };
+
+  const structuredAI = aiExplanation?.structured_output;
 
   return (
     <div
@@ -35,7 +57,7 @@ export default function VariantDetailsModal({ variant, onClose }) {
               <Dna className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 id="variant-details-title" className="text-lg font-bold font-mono tracking-tight text-white">
                   {variant.chromosome}:{variant.position} {variant.reference_allele} &gt; {variant.alternate_allele}
                 </h3>
@@ -102,7 +124,146 @@ export default function VariantDetailsModal({ variant, onClose }) {
             )}
           </div>
 
-          {/* Section 1: Ensembl VEP Consequence Annotations */}
+          {/* Section 1: Evidence-Grounded AI Explanation */}
+          <div className="p-5 rounded-2xl bg-indigo-50/40 border border-indigo-200/80 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-600" />
+                <h4 className="font-bold text-slate-900 text-sm">Evidence-Grounded AI Explanation</h4>
+              </div>
+
+              {aiExplanation ? (
+                <div className="flex items-center gap-2 flex-wrap text-xs font-mono">
+                  <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-semibold">
+                    {aiExplanation.model_provider} • {aiExplanation.model_name}
+                  </span>
+                  {structuredAI?.confidence_assessment && (
+                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-medium">
+                      Confidence: {structuredAI.confidence_assessment}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={handleGenerateExplanation}
+                  disabled={explaining}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-2xs shadow-indigo-500/20 disabled:opacity-50"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${explaining ? 'animate-spin' : ''}`} />
+                  <span>{explaining ? 'Synthesizing Explanation...' : 'Generate Grounded AI Explanation'}</span>
+                </button>
+              )}
+            </div>
+
+            {explainError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{explainError}</span>
+              </div>
+            )}
+
+            {aiExplanation ? (
+              <div className="space-y-4 text-xs">
+                {/* Summary */}
+                <div className="p-3 bg-white rounded-xl border border-indigo-100">
+                  <span className="text-[11px] font-semibold text-indigo-900 uppercase tracking-wider block mb-1">
+                    Scientific Synthesis
+                  </span>
+                  <p className="text-slate-800 leading-relaxed font-medium">
+                    {aiExplanation.explanation_text}
+                  </p>
+                </div>
+
+                {/* Biological Context */}
+                {structuredAI?.variant_context && (
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                      Molecular Consequence Context
+                    </span>
+                    <p className="text-slate-700 leading-relaxed">
+                      {structuredAI.variant_context}
+                    </p>
+                  </div>
+                )}
+
+                {/* Evidence Lists Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Supporting Evidence */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="font-semibold text-emerald-900 flex items-center gap-1.5 mb-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      Supporting Facts
+                    </span>
+                    <ul className="space-y-1 list-disc list-inside text-slate-700">
+                      {structuredAI?.supporting_evidence?.length ? (
+                        structuredAI.supporting_evidence.map((s, idx) => <li key={idx}>{s}</li>)
+                      ) : (
+                        <li className="italic text-slate-400">None explicitly listed.</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  {/* Conflicting Evidence */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="font-semibold text-rose-900 flex items-center gap-1.5 mb-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                      Conflicting Evidence
+                    </span>
+                    <ul className="space-y-1 list-disc list-inside text-slate-700">
+                      {structuredAI?.conflicting_evidence?.length ? (
+                        structuredAI.conflicting_evidence.map((c, idx) => <li key={idx}>{c}</li>)
+                      ) : (
+                        <li className="italic text-slate-400">No discrepancies identified.</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  {/* Scientific Uncertainties */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="font-semibold text-amber-900 flex items-center gap-1.5 mb-1.5">
+                      <HelpCircle className="w-3.5 h-3.5 text-amber-600" />
+                      Scientific Uncertainties
+                    </span>
+                    <ul className="space-y-1 list-disc list-inside text-slate-700">
+                      {structuredAI?.uncertainties?.length ? (
+                        structuredAI.uncertainties.map((u, idx) => <li key={idx}>{u}</li>)
+                      ) : (
+                        <li className="italic text-slate-400">No specific uncertainties noted.</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  {/* Missing Information */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                    <span className="font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
+                      <Info className="w-3.5 h-3.5 text-slate-500" />
+                      Missing Data Gaps
+                    </span>
+                    <ul className="space-y-1 list-disc list-inside text-slate-700">
+                      {structuredAI?.missing_information?.length ? (
+                        structuredAI.missing_information.map((m, idx) => <li key={idx}>{m}</li>)
+                      ) : (
+                        <li className="italic text-slate-400">Standard pipeline coverage.</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-400 font-mono text-right">
+                  Prompt Version: {aiExplanation.prompt_version} • Status: {aiExplanation.validation_status}
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-white rounded-xl border border-dashed border-indigo-200 text-center text-xs text-slate-500 space-y-1">
+                <p>No AI explanation has been generated for this candidate mutation yet.</p>
+                <p className="text-[11px] text-slate-400">
+                  Click the button above to synthesize retrieved VEP consequence and ClinVar records with zero hallucination.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: Ensembl VEP Consequence Annotations */}
           <div>
             <div className="flex items-center gap-2 pb-2 mb-3 border-b border-slate-200">
               <Activity className="w-4 h-4 text-blue-600" />
@@ -143,7 +304,7 @@ export default function VariantDetailsModal({ variant, onClose }) {
             )}
           </div>
 
-          {/* Section 2: NCBI ClinVar Evidence */}
+          {/* Section 3: NCBI ClinVar Evidence */}
           <div>
             <div className="flex items-center gap-2 pb-2 mb-3 border-b border-slate-200">
               <FileText className="w-4 h-4 text-teal-600" />
@@ -196,7 +357,7 @@ export default function VariantDetailsModal({ variant, onClose }) {
             )}
           </div>
 
-          {/* Section 3: Prioritization Reasons & Limitations */}
+          {/* Section 4: Prioritization Reasons & Limitations */}
           <div>
             <div className="flex items-center gap-2 pb-2 mb-3 border-b border-slate-200">
               <Layers className="w-4 h-4 text-indigo-600" />

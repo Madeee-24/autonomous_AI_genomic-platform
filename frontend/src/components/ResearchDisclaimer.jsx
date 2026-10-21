@@ -28,3 +28,4 @@ export default function ResearchDisclaimer({ compact = false }) {
     </aside>
   );
 }
+

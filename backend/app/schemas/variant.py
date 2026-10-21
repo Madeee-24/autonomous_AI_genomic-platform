@@ -38,6 +38,17 @@ class PrioritizationSummary(BaseModel):
     limitations: Optional[Dict[str, Any]] = None
 
 
+class AIExplanationSummary(BaseModel):
+    id: str
+    model_provider: str
+    model_name: str
+    prompt_version: str = "v1.0"
+    explanation_text: str
+    validation_status: str = "VALID"
+    structured_output: Optional[Dict[str, Any]] = None
+    created_at: Optional[datetime] = None
+
+
 class VariantItemResponse(BaseModel):
     id: str
     analysis_id: str
@@ -68,6 +79,7 @@ class VariantItemResponse(BaseModel):
     annotations: List[AnnotationSummary] = []
     evidence_records: List[EvidenceSummary] = []
     prioritization: Optional[PrioritizationSummary] = None
+    ai_explanation: Optional[AIExplanationSummary] = None
 
 
 class VariantDetailResponse(VariantItemResponse):
@@ -108,3 +120,4 @@ class DashboardSummaryResponse(BaseModel):
     average_annotation_coverage_pct: float
     average_evidence_coverage_pct: float
     tier_distribution: Dict[str, int]
+

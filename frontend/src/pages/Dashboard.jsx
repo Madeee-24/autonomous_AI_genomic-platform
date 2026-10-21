@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Activity,
   Layers,
   UploadCloud,
   CheckCircle2,
@@ -10,10 +11,9 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { analysesApi, datasetsApi } from '../services/api';
+import { analysesApi } from '../services/api';
 import MetricCard from '../components/MetricCard';
 import StatusBadge from '../components/StatusBadge';
-import TierBadge from '../components/TierBadge';
 
 const TIER_COLORS = {
   TIER_1_CRITICAL: '#e11d48', // rose-600

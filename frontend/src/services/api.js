@@ -70,6 +70,10 @@ export const analysesApi = {
   },
   getVariantDetail: (analysisId, variantId) =>
     api.get(`/analyses/${analysisId}/variants/${variantId}`),
+  explainVariant: (analysisId, variantId) =>
+    api.post(`/analyses/${analysisId}/variants/${variantId}/explain`),
+  getVariantExplanation: (analysisId, variantId) =>
+    api.get(`/analyses/${analysisId}/variants/${variantId}/explanation`),
   getDashboardSummary: () => api.get('/analyses/dashboard/summary'),
 };
 
@@ -78,3 +82,4 @@ export const healthApi = {
 };
 
 export default api;
+

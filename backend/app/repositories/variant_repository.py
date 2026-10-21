@@ -50,7 +50,8 @@ class VariantRepository(BaseRepository[Variant]):
             .options(
                 joinedload(Variant.annotations),
                 joinedload(Variant.evidence_records),
-                joinedload(Variant.prioritization)
+                joinedload(Variant.prioritization),
+                joinedload(Variant.ai_explanation)
             )
         )
         count_stmt = select(func.count(func.distinct(Variant.id))).where(Variant.analysis_id == analysis_id)
@@ -128,7 +129,8 @@ class VariantRepository(BaseRepository[Variant]):
             .options(
                 joinedload(Variant.annotations),
                 joinedload(Variant.evidence_records),
-                joinedload(Variant.prioritization)
+                joinedload(Variant.prioritization),
+                joinedload(Variant.ai_explanation)
             )
         )
         return db.scalars(stmt).unique().first()

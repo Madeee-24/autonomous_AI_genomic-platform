@@ -16,6 +16,7 @@ from app.schemas.dataset import (
     ValidationOnlyResponse,
 )
 from app.schemas.variant import (
+    AIExplanationSummary,
     AnalysisStatisticsResponse,
     DashboardSummaryResponse,
     VariantDetailResponse,
@@ -24,6 +25,7 @@ from app.schemas.variant import (
 )
 
 __all__ = [
+    "AIExplanationSummary",
     "AnalysisCreateRequest",
     "AnalysisListResponse",
     "AnalysisOptions",

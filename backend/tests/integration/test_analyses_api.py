@@ -333,6 +333,69 @@ def test_create_and_run_analysis_with_prioritization(sample_vcf_path):
     assert "evidence_records" in detail_data
     assert "prioritization" in detail_data
 
+    # 9. Test On-Demand Explain Variant Endpoint
+    explain_res = client.post(f"/api/v1/analyses/{analysis_id}/variants/{variant_id}/explain")
+    assert explain_res.status_code == 200
+    exp_data = explain_res.json()
+    assert exp_data["validation_status"] == "VALID"
+    assert "explanation_text" in exp_data
+    assert exp_data["structured_output"] is not None
+    assert "confidence_assessment" in exp_data["structured_output"]
+
+    # 10. Test Get Stored AI Explanation
+    get_exp_res = client.get(f"/api/v1/analyses/{analysis_id}/variants/{variant_id}/explanation")
+    assert get_exp_res.status_code == 200
+    assert get_exp_res.json()["id"] == exp_data["id"]
+
+
+def test_create_and_run_analysis_with_ai_explanations(sample_vcf_path):
+    from unittest.mock import patch
+    from tests.unit.test_vep_client import MOCK_VEP_RESPONSE
+    from tests.unit.test_clinvar_client import MOCK_CLINVAR_RECORD_TP53
+    from app.db.session import get_db
+    from app.models.ai import AIExplanation
+    from sqlalchemy import select
+
+    with open(sample_vcf_path, "rb") as f:
+        upload_res = client.post(
+            "/api/v1/datasets/upload",
+            files={"file": ("sample_for_ai.vcf", f, "text/plain")},
+            data={"assembly": "GRCh38"}
+        )
+    dataset_id = upload_res.json()["dataset_id"]
+
+    with patch("app.bioinformatics.vep_client.EnsemblVEPClient.annotate_batch", return_value=(MOCK_VEP_RESPONSE, None)):
+        with patch("app.evidence.clinvar_client.ClinVarClient.search_variant_uids", return_value=["12374"]):
+            with patch("app.evidence.clinvar_client.ClinVarClient.fetch_summaries", return_value={"12374": MOCK_CLINVAR_RECORD_TP53}):
+                analysis_res = client.post(
+                    "/api/v1/analyses",
+                    json={
+                        "dataset_id": dataset_id,
+                        "genome_assembly": "GRCh38",
+                        "options": {
+                            "annotate_with_vep": True,
+                            "retrieve_clinvar_evidence": True,
+                            "generate_ai_explanations": True
+                        }
+                    }
+                )
+
+    assert analysis_res.status_code == 202
+    analysis_id = analysis_res.json()["id"]
+
+    get_res = client.get(f"/api/v1/analyses/{analysis_id}")
+    assert get_res.status_code == 200
+    assert get_res.json()["status"] in ["COMPLETED", "COMPLETED_WITH_WARNINGS"]
+
+    events_res = client.get(f"/api/v1/analyses/{analysis_id}/events")
+    stages = [e["stage"] for e in events_res.json()]
+    assert "GENERATING_EXPLANATIONS" in stages
+
+    db = next(app.dependency_overrides[get_db]())
+    ai_explanations = list(db.scalars(select(AIExplanation)).all())
+    assert len(ai_explanations) > 0
+    assert any(exp.validation_status == "VALID" for exp in ai_explanations)
+
 
 
 

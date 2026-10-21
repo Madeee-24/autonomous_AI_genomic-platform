@@ -52,3 +52,4 @@ export default function TierBadge({ category, score, showScore = true }) {
     </span>
   );
 }
+
