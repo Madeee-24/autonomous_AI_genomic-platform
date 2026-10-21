@@ -87,3 +87,4 @@ class ValidationSummary(BaseModel):
     contigs_declared: List[str] = Field(default_factory=list)
     sample_names: List[str] = Field(default_factory=list)
     contains_sample_genotypes: bool = False
+

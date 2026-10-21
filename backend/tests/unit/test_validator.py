@@ -108,3 +108,4 @@ def test_detect_assembly_from_header():
     assert detect_assembly_from_header(["##reference=GRCh37"]) == "GRCh37"
     assert detect_assembly_from_header(["##reference=hg19"]) == "GRCh37"
     assert detect_assembly_from_header(["##source=Custom"]) is None
+

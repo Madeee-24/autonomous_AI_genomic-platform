@@ -167,3 +167,4 @@ def test_annotate_variants_mapping():
     assert a_cftr.gene_symbol == "CFTR"
     assert a_cftr.consequence == "frameshift_variant"
     assert a_cftr.impact == "HIGH"
+

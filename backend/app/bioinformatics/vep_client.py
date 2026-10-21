@@ -225,3 +225,4 @@ class EnsemblVEPClient:
 
 
 vep_client = EnsemblVEPClient()
+

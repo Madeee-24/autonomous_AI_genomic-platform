@@ -106,3 +106,4 @@ def test_upload_malformed_vcf():
     assert response.status_code == 400
     data = response.json()
     assert "validation failed" in data["detail"].lower()
+

@@ -82,3 +82,4 @@ if __name__ == "__main__":
         print("Usage: python -m app.bioinformatics.cli_summary <path_to_vcf>")
         sys.exit(1)
     print_cli_summary(sys.argv[1])
+

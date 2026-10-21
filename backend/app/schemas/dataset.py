@@ -61,3 +61,4 @@ class ErrorResponse(BaseModel):
     detail: str = Field(..., description="Human-readable error explanation")
     error_code: str = Field(..., description="Standardized application error code")
     timestamp: str = Field(..., description="ISO 8601 error occurrence timestamp")
+

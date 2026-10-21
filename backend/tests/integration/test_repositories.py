@@ -193,3 +193,4 @@ def test_variant_repository_bulk_and_queries(db_session: Session):
     chr7_variants, chr7_total = variant_repo.get_by_analysis(db_session, job.id, chromosome="chr7")
     assert chr7_total == 1
     assert chr7_variants[0].chromosome == "chr7"
+

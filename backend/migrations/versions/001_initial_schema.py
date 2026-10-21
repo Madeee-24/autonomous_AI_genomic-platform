@@ -221,3 +221,4 @@ def downgrade() -> None:
     op.drop_table('analysis_jobs')
     op.drop_table('datasets')
     op.drop_table('users')
+

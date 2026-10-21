@@ -327,3 +327,4 @@ class VCFValidator:
             sample_names=sample_names,
             contains_sample_genotypes=contains_sample_genotypes
         )
+

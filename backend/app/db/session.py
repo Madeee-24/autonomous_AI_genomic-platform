@@ -47,3 +47,4 @@ def create_all_tables(target_engine=None) -> None:
     eng = target_engine or engine
     Base.metadata.create_all(bind=eng)
     logger.info("Database tables verified/created successfully.")
+

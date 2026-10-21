@@ -19,3 +19,4 @@ def test_health_check_endpoint():
     assert data["status"] == "healthy"
     assert "GRCh38" in data["supported_assemblies"]
     assert data["environment"] == "development"
+

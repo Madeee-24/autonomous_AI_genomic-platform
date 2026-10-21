@@ -16,3 +16,4 @@ class Base(DeclarativeBase):
     Base class for all database entities, providing common fields.
     """
     pass
+

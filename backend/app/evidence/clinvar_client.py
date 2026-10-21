@@ -237,3 +237,4 @@ class ClinVarClient:
 
 
 clinvar_client = ClinVarClient()
+

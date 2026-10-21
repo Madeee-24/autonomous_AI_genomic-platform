@@ -70,3 +70,4 @@ class AnalysisRepository(BaseRepository[AnalysisJob]):
 
 
 analysis_repo = AnalysisRepository()
+

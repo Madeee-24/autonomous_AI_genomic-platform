@@ -13,7 +13,9 @@ from app.core.logging import logger
 from app.db.session import SessionLocal
 from app.evidence.clinvar_client import ClinVarClient, clinvar_client
 from app.models.analysis import AnalysisJob
+from app.models.prioritization import PrioritizationResult
 from app.models.variant import Variant
+from app.prioritization.prioritizer import VariantPrioritizer, prioritizer
 from app.repositories.analysis_repository import analysis_repo
 from app.repositories.dataset_repository import dataset_repo
 from app.repositories.variant_repository import variant_repo
@@ -36,12 +38,14 @@ class AnalysisService:
         parser: Optional[VCFParser] = None,
         session_factory=None,
         vep_client_instance: Optional[EnsemblVEPClient] = None,
-        clinvar_client_instance: Optional[ClinVarClient] = None
+        clinvar_client_instance: Optional[ClinVarClient] = None,
+        prioritizer_instance: Optional[VariantPrioritizer] = None
     ):
         self.parser = parser or VCFParser()
         self.session_factory = session_factory or SessionLocal
         self.vep_client = vep_client_instance or vep_client
         self.clinvar_client = clinvar_client_instance or clinvar_client
+        self.prioritizer = prioritizer_instance or prioritizer
 
     def create_analysis(
         self,
@@ -206,7 +210,29 @@ class AnalysisService:
                     details={"evidence_count": len(evidence_records), "warnings": cv_warnings}
                 )
 
-            # 6. Mark COMPLETED (or COMPLETED_WITH_WARNINGS)
+            # 6. Prioritization Stage (Rule-based candidate ranking)
+            analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="PRIORITIZING")
+            analysis_repo.add_event(
+                db, job_id=job_id, stage="PRIORITIZING", event_type="STAGE_STARTED",
+                message="Evaluating variants using transparent heuristic prioritization matrix."
+            )
+            db_variants, _ = variant_repo.get_by_analysis(db, analysis_id=job_id, limit=10000)
+            prioritization_results = self.prioritizer.prioritize_batch(db_variants)
+            if prioritization_results:
+                db.add_all(prioritization_results)
+                db.commit()
+
+            tier_counts: dict = {}
+            for pr in prioritization_results:
+                tier_counts[pr.priority_category] = tier_counts.get(pr.priority_category, 0) + 1
+
+            analysis_repo.add_event(
+                db, job_id=job_id, stage="PRIORITIZING", event_type="STAGE_COMPLETED",
+                message=f"Prioritized {len(prioritization_results)} candidate variants.",
+                details={"tier_distribution": tier_counts}
+            )
+
+            # 7. Mark COMPLETED (or COMPLETED_WITH_WARNINGS)
             final_status = "COMPLETED_WITH_WARNINGS" if summary.warnings else "COMPLETED"
             analysis_repo.update_status(db, job_id=job_id, status=final_status, current_stage="FINISHED")
             analysis_repo.add_event(

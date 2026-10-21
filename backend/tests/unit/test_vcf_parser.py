@@ -93,3 +93,4 @@ def test_parse_to_dataframe(sample_vcf_path):
     ]
     assert "SNV" in df["variant_type"].values
     assert "DELETION" in df["variant_type"].values
+

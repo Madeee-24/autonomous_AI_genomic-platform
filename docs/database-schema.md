@@ -217,3 +217,4 @@ Stores deterministic ranking outcomes.
 Bounded summaries synthesized from stored evidence.
 - `explanation_text` & `structured_output_json`
 - `validation_status` (`VALID`, `FAILED`)
+

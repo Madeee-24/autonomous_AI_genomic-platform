@@ -243,3 +243,4 @@ class VCFParser:
 
         df = pd.DataFrame.from_records(records)
         return df, summary
+

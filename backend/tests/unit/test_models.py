@@ -74,3 +74,4 @@ def test_variant_and_annotation_model():
     )
     assert annotation.gene_symbol == "CFTR"
     assert annotation.impact == "HIGH"
+

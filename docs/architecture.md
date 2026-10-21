@@ -71,3 +71,4 @@ sequenceDiagram
 - `app/prioritization/`: Transparent, auditable scoring rules engine.
 - `app/ai/`: Structured prompt generator, LLM API client, and Pydantic response validator.
 - `app/reports/`: ReportLab PDF document builder.
+

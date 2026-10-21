@@ -129,3 +129,4 @@ def test_retrieve_evidence_for_variants_with_cache():
             # Call counts should remain 1 because of cache hit
             assert mock_search.call_count == 1
             assert mock_fetch.call_count == 1
+

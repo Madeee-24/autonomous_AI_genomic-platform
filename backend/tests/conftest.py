@@ -45,3 +45,4 @@ def setup_test_database():
 
     Base.metadata.drop_all(bind=test_engine)
     app.dependency_overrides.clear()
+

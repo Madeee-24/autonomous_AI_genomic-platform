@@ -233,5 +233,63 @@ def test_create_and_run_analysis_with_clinvar_evidence(sample_vcf_path):
     assert any(e.source_accession == "VCV000012374" for e in evidence_records)
 
 
+def test_create_and_run_analysis_with_prioritization(sample_vcf_path):
+    from unittest.mock import patch
+    from tests.unit.test_vep_client import MOCK_VEP_RESPONSE
+    from tests.unit.test_clinvar_client import MOCK_CLINVAR_RECORD_TP53
+    from app.db.session import get_db
+    from app.models.prioritization import PrioritizationResult
+    from sqlalchemy import select
+
+    # 1. Upload dataset
+    with open(sample_vcf_path, "rb") as f:
+        upload_res = client.post(
+            "/api/v1/datasets/upload",
+            files={"file": ("sample_for_prio.vcf", f, "text/plain")},
+            data={"assembly": "GRCh38"}
+        )
+    dataset_id = upload_res.json()["dataset_id"]
+
+    # 2. Run analysis with both VEP and ClinVar enabled
+    with patch("app.bioinformatics.vep_client.EnsemblVEPClient.annotate_batch", return_value=(MOCK_VEP_RESPONSE, None)):
+        with patch("app.evidence.clinvar_client.ClinVarClient.search_variant_uids", return_value=["12374"]):
+            with patch("app.evidence.clinvar_client.ClinVarClient.fetch_summaries", return_value={"12374": MOCK_CLINVAR_RECORD_TP53}):
+                analysis_res = client.post(
+                    "/api/v1/analyses",
+                    json={
+                        "dataset_id": dataset_id,
+                        "genome_assembly": "GRCh38",
+                        "options": {
+                            "annotate_with_vep": True,
+                            "retrieve_clinvar_evidence": True,
+                            "generate_ai_explanations": False
+                        }
+                    }
+                )
+
+    assert analysis_res.status_code == 202
+    analysis_id = analysis_res.json()["id"]
+
+    # 3. Check status
+    get_res = client.get(f"/api/v1/analyses/{analysis_id}")
+    assert get_res.status_code == 200
+    assert get_res.json()["status"] in ["COMPLETED", "COMPLETED_WITH_WARNINGS"]
+
+    # 4. Check events for PRIORITIZING stage
+    events_res = client.get(f"/api/v1/analyses/{analysis_id}/events")
+    stages = [e["stage"] for e in events_res.json()]
+    assert "PRIORITIZING" in stages
+
+    # 5. Check database for persisted PrioritizationResult records
+    db = next(app.dependency_overrides[get_db]())
+    prio_results = list(db.scalars(select(PrioritizationResult)).all())
+    assert len(prio_results) > 0
+
+    # Ensure tier 1 critical variant is recognized
+    categories = [p.priority_category for p in prio_results]
+    assert "TIER_1_CRITICAL" in categories
+
+
+
 
 
