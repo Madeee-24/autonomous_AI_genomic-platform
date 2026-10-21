@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Dna,
   RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { analysesApi } from '../services/api';

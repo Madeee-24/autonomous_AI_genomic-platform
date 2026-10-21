@@ -47,4 +47,6 @@ backend/data/generated_reports/*
 private_uploads/
 private_reports/
 *.vcf.gz.tbi
+*.log
+*.db
 

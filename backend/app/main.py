@@ -27,7 +27,14 @@ async def lifespan(app: FastAPI):
     os.makedirs(upload_path, exist_ok=True)
     os.makedirs(report_path, exist_ok=True)
     logger.info(f"Storage directories initialized: {upload_path}, {report_path}")
-    
+
+    # Ensure database schema is initialized
+    from app.db.session import create_all_tables
+    try:
+        create_all_tables()
+    except Exception as e:
+        logger.warning(f"Database schema auto-check notice: {e}")
+
     yield
     
     logger.info("Shutting down Genomic Analysis Platform.")
