@@ -158,7 +158,7 @@ Frontend interface will be available at: `http://localhost:5173`
 - [x] **Phase 3:** PostgreSQL Database Models & Alembic Migrations
 - [x] **Phase 4:** Asynchronous Analysis Job Orchestration
 - [x] **Phase 5:** Ensembl VEP Annotation Integration
-- [ ] **Phase 6:** ClinVar Clinical Evidence Retrieval & Conflict Detection
+- [x] **Phase 6:** ClinVar Clinical Evidence Retrieval & Conflict Detection
 - [ ] **Phase 7:** Transparent Rule-Based Candidate Prioritization
 - [ ] **Phase 8:** React + Vite Interactive Research Dashboard
 - [ ] **Phase 9:** Evidence-Grounded AI Explanation Layer

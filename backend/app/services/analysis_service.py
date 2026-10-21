@@ -11,6 +11,7 @@ from app.bioinformatics.vcf_parser import VCFParser
 from app.bioinformatics.vep_client import EnsemblVEPClient, vep_client
 from app.core.logging import logger
 from app.db.session import SessionLocal
+from app.evidence.clinvar_client import ClinVarClient, clinvar_client
 from app.models.analysis import AnalysisJob
 from app.models.variant import Variant
 from app.repositories.analysis_repository import analysis_repo
@@ -34,11 +35,13 @@ class AnalysisService:
         self,
         parser: Optional[VCFParser] = None,
         session_factory=None,
-        vep_client_instance: Optional[EnsemblVEPClient] = None
+        vep_client_instance: Optional[EnsemblVEPClient] = None,
+        clinvar_client_instance: Optional[ClinVarClient] = None
     ):
         self.parser = parser or VCFParser()
         self.session_factory = session_factory or SessionLocal
         self.vep_client = vep_client_instance or vep_client
+        self.clinvar_client = clinvar_client_instance or clinvar_client
 
     def create_analysis(
         self,
@@ -182,7 +185,28 @@ class AnalysisService:
                     details={"annotations_count": len(annotations), "warnings": vep_warnings}
                 )
 
-            # 5. Mark COMPLETED (or COMPLETED_WITH_WARNINGS)
+            # 5. Optional ClinVar Evidence Retrieval Stage
+            if options.get("retrieve_clinvar_evidence", False):
+                analysis_repo.update_status(db, job_id=job_id, status="RUNNING", current_stage="RETRIEVING_EVIDENCE")
+                analysis_repo.add_event(
+                    db, job_id=job_id, stage="RETRIEVING_EVIDENCE", event_type="STAGE_STARTED",
+                    message="Querying NCBI ClinVar for clinical assertions and conflict detection."
+                )
+                evidence_records, cv_warnings = self.clinvar_client.retrieve_evidence_for_variants(variant_models, assembly=assembly)
+                if evidence_records:
+                    db.add_all(evidence_records)
+                    db.commit()
+
+                for w in cv_warnings:
+                    summary.warnings.append(w)
+
+                analysis_repo.add_event(
+                    db, job_id=job_id, stage="RETRIEVING_EVIDENCE", event_type="STAGE_COMPLETED",
+                    message=f"Retrieved {len(evidence_records)} clinical evidence records from ClinVar.",
+                    details={"evidence_count": len(evidence_records), "warnings": cv_warnings}
+                )
+
+            # 6. Mark COMPLETED (or COMPLETED_WITH_WARNINGS)
             final_status = "COMPLETED_WITH_WARNINGS" if summary.warnings else "COMPLETED"
             analysis_repo.update_status(db, job_id=job_id, status=final_status, current_stage="FINISHED")
             analysis_repo.add_event(

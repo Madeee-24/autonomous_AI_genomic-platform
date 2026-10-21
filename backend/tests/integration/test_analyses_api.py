@@ -178,4 +178,60 @@ def test_create_and_run_analysis_with_vep_annotations(sample_vcf_path):
     assert any(s in ["TP53", "CFTR"] for s in symbols)
 
 
+def test_create_and_run_analysis_with_clinvar_evidence(sample_vcf_path):
+    from unittest.mock import patch
+    from tests.unit.test_clinvar_client import MOCK_CLINVAR_RECORD_TP53
+    from app.db.session import get_db
+    from app.models.evidence import EvidenceRecord
+    from sqlalchemy import select
+
+    # 1. Upload dataset
+    with open(sample_vcf_path, "rb") as f:
+        upload_res = client.post(
+            "/api/v1/datasets/upload",
+            files={"file": ("sample_for_clinvar.vcf", f, "text/plain")},
+            data={"assembly": "GRCh38"}
+        )
+    dataset_id = upload_res.json()["dataset_id"]
+
+    # 2. Start analysis with retrieve_clinvar_evidence=True
+    with patch("app.evidence.clinvar_client.ClinVarClient.search_variant_uids", return_value=["12374"]):
+        with patch("app.evidence.clinvar_client.ClinVarClient.fetch_summaries", return_value={"12374": MOCK_CLINVAR_RECORD_TP53}):
+            analysis_res = client.post(
+                "/api/v1/analyses",
+                json={
+                    "dataset_id": dataset_id,
+                    "genome_assembly": "GRCh38",
+                    "options": {
+                        "annotate_with_vep": False,
+                        "retrieve_clinvar_evidence": True,
+                        "generate_ai_explanations": False
+                    }
+                }
+            )
+
+    assert analysis_res.status_code == 202
+    analysis_id = analysis_res.json()["id"]
+
+    # 3. Check status
+    get_res = client.get(f"/api/v1/analyses/{analysis_id}")
+    assert get_res.status_code == 200
+    job_data = get_res.json()
+    assert job_data["status"] in ["COMPLETED", "COMPLETED_WITH_WARNINGS"]
+
+    # 4. Check events for RETRIEVING_EVIDENCE stage
+    events_res = client.get(f"/api/v1/analyses/{analysis_id}/events")
+    events = events_res.json()
+    stages = [e["stage"] for e in events]
+    assert "RETRIEVING_EVIDENCE" in stages
+
+    # 5. Check database for persisted clinical evidence records
+    db = next(app.dependency_overrides[get_db]())
+    evidence_records = list(db.scalars(select(EvidenceRecord)).all())
+    assert len(evidence_records) > 0
+    assert any(e.interpretation == "Pathogenic" for e in evidence_records)
+    assert any(e.source_accession == "VCV000012374" for e in evidence_records)
+
+
+
 
