@@ -9,6 +9,9 @@ import {
   RefreshCw,
   Ban,
   AlertTriangle,
+  FileText,
+  RotateCcw,
+  Download,
 } from 'lucide-react';
 import { analysesApi } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
@@ -30,6 +33,7 @@ export default function AnalysisDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [resuming, setResuming] = useState(false);
 
   const fetchJobAndEvents = async () => {
     try {
@@ -71,6 +75,19 @@ export default function AnalysisDetails() {
       alert(`Could not cancel analysis: ${err.message}`);
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleResume = async () => {
+    setResuming(true);
+    try {
+      const updated = await analysesApi.resume(id);
+      setJob(updated);
+      fetchJobAndEvents();
+    } catch (err) {
+      alert(`Could not resume analysis: ${err.message}`);
+    } finally {
+      setResuming(false);
     }
   };
 
@@ -156,6 +173,31 @@ export default function AnalysisDetails() {
                 <Dna className="w-4 h-4" />
                 <span>Open Variant Explorer</span>
               </Link>
+            )}
+
+            {(job.status === 'COMPLETED' || job.status === 'COMPLETED_WITH_WARNINGS') && (
+              <a
+                href={`/api/v1/analyses/${job.id}/report/download`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-slate-300"
+                title="Download Publication-Ready PDF Report"
+              >
+                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <span>Download PDF Report</span>
+              </a>
+            )}
+
+            {(job.status === 'FAILED' || job.status === 'CANCELLED') && (
+              <button
+                onClick={handleResume}
+                disabled={resuming}
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-amber-300"
+                title="Resume pipeline execution from last stage checkpoint"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 text-amber-600 ${resuming ? 'animate-spin' : ''}`} />
+                <span>{resuming ? 'Resuming...' : 'Resume from Checkpoint'}</span>
+              </button>
             )}
 
             {(job.status === 'RUNNING' || job.status === 'QUEUED') && (

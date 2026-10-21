@@ -75,6 +75,15 @@ export const analysesApi = {
   getVariantExplanation: (analysisId, variantId) =>
     api.get(`/analyses/${analysisId}/variants/${variantId}/explanation`),
   getDashboardSummary: () => api.get('/analyses/dashboard/summary'),
+  resume: (id) => api.post(`/analyses/${id}/resume`),
+  getCheckpoints: (id) => api.get(`/analyses/${id}/checkpoints`),
+};
+
+export const reportsApi = {
+  generate: (analysisId) => api.post(`/analyses/${analysisId}/reports`),
+  list: (analysisId) => api.get(`/analyses/${analysisId}/reports`),
+  getDownloadUrl: (reportId) => `/api/v1/reports/${reportId}/download`,
+  getLatestDownloadUrl: (analysisId) => `/api/v1/analyses/${analysisId}/report/download`,
 };
 
 export const healthApi = {
