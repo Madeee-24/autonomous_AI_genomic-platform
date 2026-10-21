@@ -93,3 +93,4 @@ async def download_report_by_id(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+

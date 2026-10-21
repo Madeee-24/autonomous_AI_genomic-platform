@@ -83,3 +83,4 @@ When resuming a failed or cancelled analysis via `POST /api/v1/analyses/{id}/res
    - `RETRIEVING_EVIDENCE`: Replaces existing evidence rows on retry.
    - `PRIORITIZING`: Replaces prior heuristic score rows to guarantee unique constraints on `variant_id`.
    - `GENERATING_EXPLANATIONS`: Updates existing `AIExplanation` records in place.
+

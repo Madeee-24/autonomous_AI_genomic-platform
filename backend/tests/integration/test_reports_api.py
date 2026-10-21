@@ -114,3 +114,4 @@ def test_generate_report_incomplete_analysis_fails():
 def test_generate_report_nonexistent_job():
     res = client.post("/api/v1/analyses/00000000-0000-0000-0000-000000000000/reports")
     assert res.status_code == 404
+

@@ -127,3 +127,4 @@ Streams the latest PDF report document as a binary attachment (`application/pdf`
 
 ### `GET /api/v1/reports/{report_id}/download`
 Streams a specific PDF report by its report ID.
+

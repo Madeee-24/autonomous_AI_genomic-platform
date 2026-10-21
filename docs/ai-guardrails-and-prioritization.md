@@ -67,3 +67,4 @@ Output is validated through the `VariantExplanationOutput` Pydantic model:
 2. **Mandatory Evidence Grounding:** The model must reference explicit ClinVar accessions (`VCV...`) or Ensembl transcript IDs (`ENST...`).
 3. **Missing Evidence Neutrality:** Absence of records in ClinVar must be declared neutrally without asserting benignity or health implications.
 4. **Explicit Scientific Uncertainties:** Output must include a non-empty list of scientific limitations (e.g. unknown zygosity, tissue-specific expression, or submitter disagreements).
+

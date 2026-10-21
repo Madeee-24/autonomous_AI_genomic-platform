@@ -38,3 +38,4 @@ class ReportRepository(BaseRepository[Report]):
 
 
 report_repo = ReportRepository()
+

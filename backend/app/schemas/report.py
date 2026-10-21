@@ -28,3 +28,4 @@ class ReportListResponse(BaseModel):
     """
     total: int
     items: List[ReportResponse]
+
