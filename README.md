@@ -159,10 +159,10 @@ Frontend interface will be available at: `http://localhost:5173`
 - [x] **Phase 4:** Asynchronous Analysis Job Orchestration
 - [x] **Phase 5:** Ensembl VEP Annotation Integration
 - [x] **Phase 6:** ClinVar Clinical Evidence Retrieval & Conflict Detection
-- [ ] **Phase 7:** Transparent Rule-Based Candidate Prioritization
-- [ ] **Phase 8:** React + Vite Interactive Research Dashboard
-- [ ] **Phase 9:** Evidence-Grounded AI Explanation Layer
-- [ ] **Phase 10:** Multi-Stage Workflow Orchestration
-- [ ] **Phase 11:** Audit-Ready PDF Report Generation (ReportLab)
-- [ ] **Phase 12:** End-to-End Testing, Security Hardening & Documentation
+- [x] **Phase 7:** Transparent Rule-Based Candidate Prioritization
+- [x] **Phase 8:** React + Vite Interactive Research Dashboard
+- [x] **Phase 9:** Evidence-Grounded AI Explanation Layer
+- [x] **Phase 10:** Multi-Stage Autonomous Workflow Orchestration
+- [x] **Phase 11:** Audit-Ready PDF Report Generation (ReportLab)
+- [x] **Phase 12:** End-to-End Testing, Security Hardening & Documentation
 
