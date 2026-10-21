@@ -25,6 +25,16 @@ from app.schemas.analysis import (
     AnalysisResponse,
     WorkflowEventResponse,
 )
+from app.schemas.variant import (
+    AnalysisStatisticsResponse,
+    AnnotationSummary,
+    DashboardSummaryResponse,
+    EvidenceSummary,
+    PrioritizationSummary,
+    VariantDetailResponse,
+    VariantItemResponse,
+    VariantListResponse,
+)
 from app.services.dataset_service import dataset_service
 
 
@@ -342,6 +352,173 @@ class AnalysisService:
             error_code=job.error_code,
             error_summary=job.error_summary
         )
+
+    def _format_variant_item(self, v: Variant) -> VariantItemResponse:
+        primary_ann = v.annotations[0] if v.annotations else None
+        primary_ev = v.evidence_records[0] if v.evidence_records else None
+        prio = v.prioritization
+
+        annotations_summary = [
+            AnnotationSummary(
+                id=ann.id,
+                gene_symbol=ann.gene_symbol,
+                gene_id=ann.gene_id,
+                transcript_id=ann.transcript_id,
+                consequence=ann.consequence,
+                impact=ann.impact,
+                annotation_source=ann.annotation_source,
+                annotation_version=ann.annotation_version,
+            )
+            for ann in v.annotations
+        ]
+
+        evidence_summary = [
+            EvidenceSummary(
+                id=ev.id,
+                source_name=ev.source_name,
+                source_accession=ev.source_accession,
+                interpretation=ev.interpretation,
+                review_status=ev.review_status,
+                evidence_summary=ev.evidence_summary,
+                source_url=ev.source_url,
+                has_conflicts=ev.has_conflicts,
+                retrieved_at=ev.retrieved_at,
+            )
+            for ev in v.evidence_records
+        ]
+
+        prio_summary = (
+            PrioritizationSummary(
+                id=prio.id,
+                rule_version=prio.rule_version,
+                score=prio.score,
+                priority_category=prio.priority_category,
+                reasons=prio.reasons_json,
+                limitations=prio.limitations_json,
+            )
+            if prio
+            else None
+        )
+
+        return VariantItemResponse(
+            id=v.id,
+            analysis_id=v.analysis_id,
+            chromosome=v.chromosome,
+            position=v.position,
+            reference_allele=v.reference_allele,
+            alternate_allele=v.alternate_allele,
+            variant_identifier=v.variant_identifier,
+            variant_type=v.variant_type,
+            quality=v.quality,
+            filter_status=v.filter_status,
+            is_multiallelic=v.is_multiallelic,
+            primary_gene=primary_ann.gene_symbol if primary_ann else None,
+            primary_consequence=primary_ann.consequence if primary_ann else None,
+            primary_impact=primary_ann.impact if primary_ann else None,
+            clinvar_interpretation=primary_ev.interpretation if primary_ev else None,
+            clinvar_review_status=primary_ev.review_status if primary_ev else None,
+            clinvar_accession=primary_ev.source_accession if primary_ev else None,
+            has_conflicts=primary_ev.has_conflicts if primary_ev else False,
+            priority_category=prio.priority_category if prio else "UNCERTAIN",
+            priority_score=prio.score if prio else None,
+            annotations=annotations_summary,
+            evidence_records=evidence_summary,
+            prioritization=prio_summary,
+        )
+
+    def get_variants(
+        self,
+        db: Session,
+        job_id: str,
+        chromosome: Optional[str] = None,
+        gene: Optional[str] = None,
+        consequence: Optional[str] = None,
+        priority_category: Optional[str] = None,
+        has_conflicts: Optional[bool] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> VariantListResponse:
+        """
+        Retrieves paginated and filtered variants for an analysis job.
+        """
+        job = analysis_repo.get(db, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Analysis job '{job_id}' not found."
+            )
+
+        skip = max(0, (page - 1) * page_size)
+        variants, total = variant_repo.get_by_analysis(
+            db=db,
+            analysis_id=job_id,
+            chromosome=chromosome,
+            gene=gene,
+            consequence=consequence,
+            priority_category=priority_category,
+            has_conflicts=has_conflicts,
+            search=search,
+            skip=skip,
+            limit=page_size,
+        )
+
+        total_pages = max(1, (total + page_size - 1) // page_size) if total > 0 else 1
+        items = [self._format_variant_item(v) for v in variants]
+
+        return VariantListResponse(
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+            items=items,
+        )
+
+    def get_variant_detail(self, db: Session, job_id: str, variant_id: str) -> VariantDetailResponse:
+        """
+        Retrieves full details, annotations, evidence, and scores for a specific variant.
+        """
+        job = analysis_repo.get(db, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Analysis job '{job_id}' not found."
+            )
+
+        variant = variant_repo.get_variant_detail(db, variant_id)
+        if not variant or variant.analysis_id != job_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Variant '{variant_id}' not found in analysis '{job_id}'."
+            )
+
+        base_item = self._format_variant_item(variant)
+        return VariantDetailResponse(
+            **base_item.model_dump(),
+            info_json=variant.info_json,
+            genotype_json=variant.genotype_json,
+        )
+
+    def get_statistics(self, db: Session, job_id: str) -> AnalysisStatisticsResponse:
+        """
+        Retrieves computed summary statistics and distributions for an analysis.
+        """
+        job = analysis_repo.get(db, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Analysis job '{job_id}' not found."
+            )
+
+        stats = variant_repo.get_statistics(db, job_id)
+        return AnalysisStatisticsResponse(**stats)
+
+    def get_dashboard_summary(self, db: Session) -> DashboardSummaryResponse:
+        """
+        Retrieves system-wide dataset, analysis, and variant counts for the main dashboard.
+        """
+        summary = variant_repo.get_dashboard_summary(db)
+        return DashboardSummaryResponse(**summary)
 
 
 analysis_service = AnalysisService()

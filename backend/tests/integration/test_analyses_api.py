@@ -289,6 +289,50 @@ def test_create_and_run_analysis_with_prioritization(sample_vcf_path):
     categories = [p.priority_category for p in prio_results]
     assert "TIER_1_CRITICAL" in categories
 
+    # 6. Test Dashboard Summary Endpoint
+    dash_res = client.get("/api/v1/analyses/dashboard/summary")
+    assert dash_res.status_code == 200
+    dash_data = dash_res.json()
+    assert dash_data["total_datasets"] >= 1
+    assert dash_data["total_analyses"] >= 1
+    assert dash_data["completed_analyses"] >= 1
+    assert "TIER_1_CRITICAL" in dash_data["tier_distribution"]
+
+    # 7. Test Analysis Statistics Endpoint
+    stats_res = client.get(f"/api/v1/analyses/{analysis_id}/statistics")
+    assert stats_res.status_code == 200
+    stats_data = stats_res.json()
+    assert stats_data["total_variants"] > 0
+    assert stats_data["annotated_variants"] > 0
+    assert stats_data["prioritized_variants"] > 0
+    assert "TIER_1_CRITICAL" in stats_data["tier_counts"]
+
+    # 8. Test Analysis Variants List with Filtering & Pagination
+    variants_res = client.get(f"/api/v1/analyses/{analysis_id}/variants?page=1&page_size=10")
+    assert variants_res.status_code == 200
+    var_data = variants_res.json()
+    assert var_data["total"] > 0
+    assert len(var_data["items"]) > 0
+
+    first_variant = var_data["items"][0]
+    variant_id = first_variant["id"]
+    assert "chromosome" in first_variant
+    assert "priority_category" in first_variant
+
+    # Test filter by chromosome
+    chr_res = client.get(f"/api/v1/analyses/{analysis_id}/variants?chromosome={first_variant['chromosome']}")
+    assert chr_res.status_code == 200
+    assert all(item["chromosome"] == first_variant["chromosome"] for item in chr_res.json()["items"])
+
+    # Test single variant detail endpoint
+    detail_res = client.get(f"/api/v1/analyses/{analysis_id}/variants/{variant_id}")
+    assert detail_res.status_code == 200
+    detail_data = detail_res.json()
+    assert detail_data["id"] == variant_id
+    assert "annotations" in detail_data
+    assert "evidence_records" in detail_data
+    assert "prioritization" in detail_data
+
 
 
 
