@@ -139,3 +139,4 @@ For production, ensure the following environment settings are configured in `bac
   ```bash
   cat backup_file.sql | docker exec -i genomics_postgres psql -U postgres -d genomics_db
   ```
+
